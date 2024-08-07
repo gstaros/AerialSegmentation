@@ -1,49 +1,49 @@
 from torch.utils.data import Dataset
-from torch import FloatTensor
-from PIL import Image
+from skimage import io
+import torch
+import numpy as np 
+import pandas as pd
 import torchvision.transforms as T
-import os
-
 
 
 class ImageSegmentationDataset(Dataset):
-  def __init__(self, 
-               image_folder: str, 
-               mask_folder: str, 
-               split: str = "train", 
-               transform = None):
-
-    self.image_folder = image_folder
-    self.mask_folder = mask_folder
-    self.split = split
-    self.tranform = transform
+  def __init__(self, dir_file: str, n_channels: int=5, n_classes: int=13, transform=None):
+    self.image_mask_mapping = pd.read_csv(dir_file)
+    self.images = np.array(self.image_mask_mapping["IMG"])
+    self.masks = np.array(self.image_mask_mapping["MSK"])
+    
+    self.n_channels = n_channels
+    self.n_classes = n_classes
+    self.transform = transform
 
 
-    if split == "train":
-      self.mask_files = sorted(os.listdir(self.mask_folder))[:400]
-      self.image_files = sorted(os.listdir(self.image_folder))[:400]
+  def read_tiff_image(self, file_name: str) -> torch.Tensor:
+    image = io.imread(file_name)
+    #io.imread gives array (H, W, C)
+    return torch.as_tensor(image).permute(2, 0, 1).type(torch.FloatTensor)
 
-    elif split == "val":
-      self.mask_files = sorted(os.listdir(self.mask_folder))[400:500]
-      self.image_files = sorted(os.listdir(self.image_folder))[400:500]
 
-    elif split == "test":
-      self.mask_files = sorted(os.listdir(self.mask_folder))[500:]
-      self.image_files = sorted(os.listdir(self.image_folder))[500:]
+  def read_tiff_mask(self, mask_name: str) -> torch.Tensor:
+    mask = io.imread(mask_name)
+
+    #one-hot encoded matric (num_classes, H, W). For every cell that is equal to current class return 1 
+    mask = np.stack([mask == i for i in range(self.n_classes)], axis=0)
+    return torch.as_tensor(mask).type(torch.FloatTensor)
 
 
   def __len__(self):
-    return len(self.image_files)
+    return len(self.images)
+    # return 1
 
 
   def __getitem__(self, idx):
-    image_filename = self.image_files[idx]
-    mask_filename = self.mask_files[idx]
-    image_path = os.path.join(self.image_folder, image_filename)
-    mask_path = os.path.join(self.mask_folder, mask_filename)
+    image_filename = self.images[idx]
+    mask_filename = self.masks[idx]
 
-    pil_to_tensor = T.Compose([T.PILToTensor(), T.Resize((256, 256))])
-    image = pil_to_tensor(Image.open(image_path))
-    mask = pil_to_tensor(Image.open(mask_path))
+    image = self.read_tiff_image(image_filename)[:self.n_channels]
+    mask = self.read_tiff_mask(mask_filename)
 
-    return image.type(FloatTensor), mask.type(FloatTensor)
+    if self.transform:
+      image, mask = self.transform(image, mask)
+
+    return image, mask
