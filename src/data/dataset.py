@@ -44,6 +44,7 @@ class ImageSegmentationDataset(Dataset):
     mask = self.read_tiff_mask(mask_filename)
 
     if self.transform:
-      image, mask = self.transform(image, mask)
+      image = self.transform(image)
+      mask = self.transform(mask)
 
     return image, mask

@@ -5,6 +5,7 @@ import torchvision.transforms as T
 
 
 class Convolution(nn.Module):
+  #convolution block
   def __init__(self, in_channels, out_channels, mid_channels=None):
       super().__init__()
       if not mid_channels:
@@ -23,16 +24,6 @@ class Convolution(nn.Module):
     
 
 
-class Upscale(nn.Module):
-  def __init__(self, in_channels, scale_factor=2):
-    super(Upscale, self).__init__()
-    self.up = nn.ConvTranspose2d(in_channels, in_channels // scale_factor, kernel_size=scale_factor, stride=scale_factor)
-
-  def forward(self, x):
-    return self.up(x)
-
-
-
 class Down(nn.Module):
   def __init__(self, in_channels, out_channels):
     super(Down, self).__init__()
@@ -41,6 +32,16 @@ class Down(nn.Module):
 
   def forward(self, x):
     return self.conv(self.maxpool(x))
+  
+
+
+class Upscale(nn.Module):
+  def __init__(self, in_channels, scale_factor=2):
+    super(Upscale, self).__init__()
+    self.up = nn.ConvTranspose2d(in_channels, in_channels // scale_factor, kernel_size=scale_factor, stride=scale_factor)
+
+  def forward(self, x):
+    return self.up(x)
 
 
 
@@ -58,6 +59,7 @@ class Up(nn.Module):
 
 
 class ConcatenateToConv(nn.Module):
+  # Concatenates list of vectors on dim=1
   def __init__(self, in_channels, out_channels):
     super(ConcatenateToConv, self).__init__()
     self.conv = Convolution(in_channels, out_channels)
