@@ -11,7 +11,7 @@ class ImageSegmentationDataset(Dataset):
     self.image_mask_mapping = pd.read_csv(dir_file)
     self.images = np.array(self.image_mask_mapping["IMG"])
     self.masks = np.array(self.image_mask_mapping["MSK"])
-    
+
     self.n_channels = n_channels
     self.n_classes = n_classes
     self.transform = transform
@@ -26,14 +26,14 @@ class ImageSegmentationDataset(Dataset):
   def read_tiff_mask(self, mask_name: str) -> torch.Tensor:
     mask = io.imread(mask_name)
 
-    #one-hot encoded matric (num_classes, H, W). For every cell that is equal to current class return 1 
-    mask = np.stack([mask == i for i in range(self.n_classes)], axis=0)
-    return torch.as_tensor(mask).type(torch.FloatTensor)
+    # set all mask values from 0-12.
+    mask[mask > 13] = 13
+    mask = mask - 1
+    return torch.from_numpy(mask).type(torch.LongTensor)
 
 
   def __len__(self):
     return len(self.images)
-    # return 1
 
 
   def __getitem__(self, idx):
@@ -45,6 +45,8 @@ class ImageSegmentationDataset(Dataset):
 
     if self.transform:
       image = self.transform(image)
-      mask = self.transform(mask)
+
+      mask = mask.unsqueeze(dim=0)
+      mask = self.transform(mask).squeeze(dim=0)
 
     return image, mask
