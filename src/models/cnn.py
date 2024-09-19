@@ -3,11 +3,11 @@ import torch.nn.functional as F
 import torch
 
 class CNN(nn.Module):
-  def __init__(self):
+  def __init__(self, in_channels, out_channel):
     super(CNN, self).__init__()
-    self.conv1 = nn.Conv2d(3, 16, kernel_size=3, padding=1)
+    self.conv1 = nn.Conv2d(in_channels, 16, kernel_size=3, padding=1)
     self.conv2 = nn.Conv2d(16, 64, kernel_size=3, padding=1)
-    self.conv3 = nn.Conv2d(64, 1, kernel_size=3, padding=1)
+    self.conv3 = nn.Conv2d(64, out_channel, kernel_size=3, padding=1)
 
   def forward(self, x):
     x = F.relu(self.conv1(x))

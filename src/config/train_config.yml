@@ -1,0 +1,15 @@
+TRAIN_CSV: csv/flair_train.csv
+VAL_CSV: csv/flair_val.csv
+
+MODEL_SAVE_PATH: training_checkpoint/
+CHECKPOINT: checkpoint.pth
+SAVE_MODEL_TYPE: min
+
+BATCH_SIZE: 4
+EPOCHS: 5
+LEARNING_RATE: 0.01
+
+MODEL_SELECTION: UNet
+LOAD_CHECKPOINT: False
+
+FIND_NUM_WORKERS: False

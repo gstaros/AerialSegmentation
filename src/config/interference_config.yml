@@ -1,0 +1,7 @@
+TEST_CSV: csv/flair_val.csv
+
+MODEL_SELECTION: UNet++
+
+BATCH_SIZE: 4
+
+FIND_NUM_WORKERS: False

@@ -3,33 +3,23 @@ import torch.nn as nn
 
 
 
-class Convolution_better(nn.Module):
-    def __init__(self, in_channels, out_channels, mid_channels=None):
-        super().__init__()
-        if not mid_channels:
-            mid_channels = out_channels
-        self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
-            nn.ReLU(inplace=True)
-        )
-
-    def forward(self, x):
-        return self.double_conv(x)
-
-
 class UNet(nn.Module):
-  def __init__(self, n_channels, n_classes):
+  def __init__(self, in_channels, num_classes):
     super(UNet, self).__init__()
-    self.in_conv = Convolution(n_channels, 64)
-    self.conv_1_0 = Down(64, 128)
-    self.conv_2_0 = Down(128, 256)
-    self.conv_3_0 = Down(256, 512)
-    self.conv_4_0 = Down(512, 1024)
-    self.up_1 = Up(1024, 512)
-    self.up_2 = Up(512, 256)
-    self.up_3 = Up(256, 128)
-    self.up_4 = Up(128, 64)
-    self.out_conv = Convolution(64, n_classes)
+
+    layers_dim = [64, 128, 256, 512, 1024]
+
+    self.in_conv = Convolution(in_channels, 64)
+    self.conv_1_0 = Down(layers_dim[0], layers_dim[1])
+    self.conv_2_0 = Down(layers_dim[1], layers_dim[2])
+    self.conv_3_0 = Down(layers_dim[2], layers_dim[3])
+    self.conv_4_0 = Down(layers_dim[3], layers_dim[4])
+
+    self.conv_3_1 = Up(1024, 512)
+    self.conv_2_1 = Up(512, 256)
+    self.conv_1_1 = Up(256, 128)
+    self.conv_0_1 = Up(128, 64)
+    self.out_conv = Convolution(64, num_classes)
 
   def forward(self, x):
     x_0_0 = self.in_conv(x)
@@ -38,11 +28,11 @@ class UNet(nn.Module):
     x_3_0 = self.conv_3_0(x_2_0)
     x_4_0 = self.conv_4_0(x_3_0)
 
-    x_4_1 = self.up_1(x_4_0, x_3_0)
-    x_3_1 = self.up_2(x_4_1, x_2_0)
-    x_2_1 = self.up_3(x_3_1, x_1_0)
-    x_1_1 = self.up_4(x_2_1, x_0_0)
-    out_conv = self.out_conv(x_1_1)
+    x_3_1 = self.conv_3_1(x_4_0, x_3_0)
+    x_2_1 = self.conv_2_1(x_3_1, x_2_0)
+    x_1_1 = self.conv_1_1(x_2_1, x_1_0)
+    x_0_1 = self.conv_0_1(x_1_1, x_0_0)
+    out_conv = self.out_conv(x_0_1)
 
     return out_conv
   
@@ -103,12 +93,12 @@ class FlexibleUNet(nn.Module):
 
 
 class UNetPlusPlus(nn.Module):
-  def __init__(self, n_channels, n_classes):
+  def __init__(self, in_channels, num_classes):
     super(UNetPlusPlus, self).__init__()
 
     layers_dim = [64, 128, 256, 512, 1024]
 
-    self.in_conv = Convolution(n_channels, 64)
+    self.in_conv = Convolution(in_channels, 64)
     self.conv_1_0 = Down(layers_dim[0], layers_dim[1])
     self.conv_2_0 = Down(layers_dim[1], layers_dim[2])
     self.conv_3_0 = Down(layers_dim[2], layers_dim[3])
@@ -133,28 +123,30 @@ class UNetPlusPlus(nn.Module):
 
     self.conv_x_0_4 = ConcatenateToConv(layers_dim[0]*5, layers_dim[0])
 
-    self.out_conv = Convolution(layers_dim[0], n_classes)
+    self.out_conv = Convolution(layers_dim[0], num_classes)
+
+    self.dropout = nn.Dropout(0.2)
 
   def forward(self, x):
     x_0_0 = self.in_conv(x)
-    x_1_0 = self.conv_1_0(x_0_0)
-    x_2_0 = self.conv_2_0(x_1_0)
-    x_3_0 = self.conv_3_0(x_2_0)
-    x_4_0 = self.conv_4_0(x_3_0)
+    x_1_0 = self.dropout(self.conv_1_0(x_0_0))
+    x_2_0 = self.dropout(self.conv_2_0(x_1_0))
+    x_3_0 = self.dropout(self.conv_3_0(x_2_0))
+    x_4_0 = self.dropout(self.conv_4_0(x_3_0))
 
     x_0_1 = self.conv_x_0_1((self.up_1(x_1_0), x_0_0))
     x_1_1 = self.conv_x_1_1((self.up_2(x_2_0), x_1_0))
     x_2_1 = self.conv_x_2_1((self.up_3(x_3_0), x_2_0))
-    x_3_1 = self.conv_x_3_1((self.up_4(x_4_0), x_3_0))
+    x_3_1 = self.dropout(self.conv_x_3_1((self.up_4(x_4_0), x_3_0)))
 
     x_0_2 = self.conv_x_0_2((self.up_1(x_1_1), x_0_0, x_0_1))
     x_1_2 = self.conv_x_1_2((self.up_2(x_2_1), x_1_0, x_1_1))
-    x_2_2 = self.conv_x_2_2((self.up_3(x_3_1), x_2_0, x_2_1))
+    x_2_2 = self.dropout(self.conv_x_2_2((self.up_3(x_3_1), x_2_0, x_2_1)))
 
     x_0_3 = self.conv_x_0_3((self.up_1(x_1_2), x_0_0, x_0_1, x_0_2))
-    x_1_3 = self.conv_x_1_3((self.up_2(x_2_2), x_1_0, x_1_1, x_1_2))
+    x_1_3 = self.dropout(self.conv_x_1_3((self.up_2(x_2_2), x_1_0, x_1_1, x_1_2)))
 
-    x_0_4 = self.conv_x_0_4((self.up_1(x_1_3), x_0_0, x_0_1, x_0_2, x_0_3))
+    x_0_4 = self.dropout(self.conv_x_0_4((self.up_1(x_1_3), x_0_0, x_0_1, x_0_2, x_0_3)))
 
     out_conv = self.out_conv(x_0_4)
 

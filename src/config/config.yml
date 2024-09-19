@@ -1,0 +1,44 @@
+IMAGE_SIZE: &im_size 256
+INPUT_CHANNELS: &in_channels 5
+OUTPUT_CHANNELS: &out_channels 13
+
+
+MODEL:
+  UNet:
+    in_channels: *in_channels
+    num_classes: *out_channels
+    ckp: ckp.pth
+
+  UNet++:
+    in_channels: *in_channels
+    num_classes: 13
+    ckp: ckp.pth
+
+  ViTSegmenter:
+    image_size: *im_size
+    patch_size: 16
+    in_channels: *in_channels
+    num_classes: *out_channels
+    embedding_dim: 768
+    num_layers: 12
+    num_heads: 12
+    hidden_dim: 3072
+    attention_dropout: 0.1
+    fc_out_dropout: 0.1
+    mlp_dropout: 0.1
+    ckp: ckp.pth
+
+  ResViTSegmenter:
+    image_size: *im_size
+    patch_size: 16
+    in_channels: *in_channels
+    num_classes: *out_channels
+    embedding_dim: 768
+    num_layers: 6
+    num_blocks: 4
+    num_heads: 12
+    hidden_dim: 3072
+    attention_dropout: 0.1
+    fc_out_dropout: 0.1
+    mlp_dropout: 0.1
+    ckp: ckp.pth
