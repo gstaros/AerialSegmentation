@@ -172,44 +172,56 @@ class Transformer(nn.Module):
 
 
 
-class PatchMerge(nn.Module):
+class ViTEncoder(nn.Module):
     def __init__(self,
-                 image_size: int= 256,
+                 image_size: int = 256,
                  patch_size: int = 16,
-                 num_classes: int = 3,
-                 embedding_dim: int= 768
-        ):
+                 in_channels: int = 3,
+                 embedding_dim: int = 768,
+                 num_layers: int = 12,
+                 num_heads: int = 12,
+                 hidden_dim: int = 3072,
+                 attention_dropout: float = 0.,
+                 fc_out_dropout: float = 0.,
+                 mlp_dropout: float = 0.):
 
-        super(PatchMerge, self).__init__()
-        self.image_size = image_size
-        self.patch_size = patch_size
-        self.num_classes = num_classes
+        super(ViTEncoder, self).__init__()
+
         self.embedding_dim = embedding_dim
 
-        self.num_patches = (image_size // patch_size) ** 2
-        self.patch_dim = embedding_dim
+        seq_length = (image_size // patch_size) ** 2
 
-        self.deconv = nn.ConvTranspose2d(
-            embedding_dim,
-            num_classes,
-            kernel_size=patch_size,
-            stride=patch_size
-        )
+        # Embedding creation
+        self.patch_embedding = PatchEmbedding(image_size, patch_size, in_channels, embedding_dim)
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embedding_dim))
+
+        self.positional_embeddings = PositionalEmbeddings(seq_length + 1, embedding_dim)
+
+        self.transformer = Transformer(num_layers,
+                                       embedding_dim,
+                                       num_heads,
+                                       hidden_dim,
+                                       attention_dropout,
+                                       fc_out_dropout,
+                                       mlp_dropout)
+        
+        self.norm = nn.LayerNorm(embedding_dim)
 
     def forward(self, x):
-        # B - Batch size, N - number of patches, D - Embedding Dim
-        B, N, D = x.shape
-        assert N == self.num_patches, "Number of patches does not match."
+        x = self.patch_embedding(x)
 
-        # Reshape and transpose back to (B, D, sqrt(N), sqrt(N))
-        x = x.view(B, D, int(self.image_size // self.patch_size), int(self.image_size // self.patch_size))
+        cls_token = self.cls_token.expand(x.size(0), -1, -1)
+        x = torch.cat((x, cls_token), 1)
 
-        # Apply the transposed convolution to reconstruct the image
-        x = self.deconv(x.float())  # (B, C, H, W)
+        x = self.positional_embeddings(x)
+
+        x = self.norm(self.transformer(x))
+
         return x
 
 
-class ViT(nn.Module):
+
+class ViTDecoder(nn.Module):
     def __init__(self,
                  image_size: int = 256,
                  patch_size: int = 16,
@@ -223,15 +235,16 @@ class ViT(nn.Module):
                  fc_out_dropout: float = 0.,
                  mlp_dropout: float = 0.):
 
-        super(ViT, self).__init__()
+        super(ViTDecoder, self).__init__()
 
+        self.image_size = image_size
+        self.patch_size = patch_size
         self.num_classes = num_classes
         self.embedding_dim = embedding_dim
 
-        seq_length = (image_size // patch_size) ** 2
+        self.scale = 1
 
         # Embedding creation
-        self.patch_embedding = PatchEmbedding(image_size, patch_size, in_channels, embedding_dim)
         self.cls_embedding = nn.Parameter(torch.randn(1, num_classes, embedding_dim))
 
         self.transformer = Transformer(num_layers,
@@ -242,20 +255,34 @@ class ViT(nn.Module):
                                        fc_out_dropout,
                                        mlp_dropout)
 
-        # self.segmentation = Segmenter()
+        self.proj_patch = nn.Parameter(self.scale * torch.randn(embedding_dim, embedding_dim))
+        self.proj_classes = nn.Parameter(self.scale * torch.randn(embedding_dim, embedding_dim))      
+
+        self.decoder_norm = nn.LayerNorm(embedding_dim)
+        self.mask_norm = nn.LayerNorm(num_classes)
+
     def forward(self, x):
-        """
-        Defined the  forward operation.
-        """
-        x = self.patch_embedding(x)
+        mask_size = self.image_size // self.patch_size
 
         cls_embedding = self.cls_embedding.expand(x.size(0), -1, -1)
         x = torch.cat((x, cls_embedding), 1)
 
-        x = self.transformer(x)
+        x = self.decoder_norm(self.transformer(x))
 
-        # x = segmentation(x)
-        return x
+
+        patches, cls_seg_feat = x[:, : -self.num_classes], x[:, -self.num_classes :]
+        patches = patches @ self.proj_patch
+        cls_seg_feat = cls_seg_feat @ self.proj_classes
+
+        patches = patches / patches.norm(dim=-1, keepdim=True)
+        cls_seg_feat = cls_seg_feat / cls_seg_feat.norm(dim=-1, keepdim=True)
+
+        masks = patches @ cls_seg_feat.transpose(1, 2)
+        masks = self.mask_norm(masks)
+
+        masks = rearrange(masks, "b (h w) n -> b n h w", h=int(mask_size))
+
+        return masks
     
 
 
@@ -280,33 +307,18 @@ class ViTSegmenter(nn.Module):
         self.patch_size = patch_size
         self.num_classes = num_classes
 
-        self.vit = ViT(image_size, patch_size, in_channels, num_classes, embedding_dim, num_layers, num_heads, hidden_dim, attention_dropout, fc_out_dropout, mlp_dropout)
+        self.encoder = ViTEncoder(image_size, patch_size, in_channels, embedding_dim, num_layers, num_heads, hidden_dim, attention_dropout, fc_out_dropout, mlp_dropout)
+        self.decoder = ViTDecoder(image_size, patch_size, in_channels, num_classes, embedding_dim, num_layers, num_heads, hidden_dim, attention_dropout, fc_out_dropout, mlp_dropout)
 
-        self.scale = 1
-        self.proj_patch = nn.Parameter(self.scale * torch.randn(embedding_dim, embedding_dim))
-        self.proj_classes = nn.Parameter(self.scale * torch.randn(embedding_dim, embedding_dim))
-
-        self.mask_norm = nn.LayerNorm(num_classes)
-
-        self.upscale = nn.Upsample(scale_factor=self.patch_size, mode='bicubic', align_corners=True)
-
+        self.upscale = nn.Upsample(scale_factor=self.patch_size, mode='bilinear', align_corners=True)
+ 
     def forward(self, x):
-        mask_size = self.image_size // self.patch_size
+        x = self.encoder(x)
 
-        x = self.vit(x)
+        # remove cls_token from encoder
+        x = x[:, 1:]
 
-        patches, cls_seg_feat = x[:, : -self.num_classes], x[:, -self.num_classes :]
-        patches = patches @ self.proj_patch
-        cls_seg_feat = cls_seg_feat @ self.proj_classes
-
-        patches = patches / patches.norm(dim=-1, keepdim=True)
-        cls_seg_feat = cls_seg_feat / cls_seg_feat.norm(dim=-1, keepdim=True)
-
-        masks = patches @ cls_seg_feat.transpose(1, 2)
-        masks = self.mask_norm(masks)
-
-        masks = rearrange(masks, "b (h w) n -> b n h w", h=int(mask_size))
-
+        masks = self.decoder(x)
         masks = self.upscale(masks)
 
         return masks
@@ -316,12 +328,11 @@ class ViTSegmenter(nn.Module):
 class ResViTSegmenter(nn.Module):
     def __init__(self,
                  image_size: int = 256,
-                 patch_size: int = 16,
+                 patch_size_list: list[int] = [8, 16, 32, 64],
                  in_channels: int = 3,
                  num_classes: int = 13,
                  embedding_dim: int = 768,
                  num_layers: int = 3,
-                 num_blocks: int = 4,
                  num_heads: int = 12,
                  hidden_dim: int = 3072,
                  attention_dropout: float = 0.,
@@ -343,12 +354,12 @@ class ResViTSegmenter(nn.Module):
                 hidden_dim,
                 attention_dropout,
                 fc_out_dropout,
-                mlp_dropout) for _ in range(num_blocks)])
+                mlp_dropout) for patch_size in patch_size_list])
 
 
         self.in_conv = Convolution(in_channels, num_classes, in_channels*in_channels)
         self.dropout = nn.Dropout(0.2)
-        self.out_conv = ConcatenateToConv(num_classes * (1 + num_blocks), num_classes)
+        self.out_conv = ConcatenateToConv(num_classes * (1 + len(patch_size_list)), num_classes)
 
     def forward(self, x):
         outputs = []

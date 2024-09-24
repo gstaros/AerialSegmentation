@@ -7,12 +7,12 @@ MODEL:
   UNet:
     in_channels: *in_channels
     num_classes: *out_channels
-    ckp: ckp.pth
+    ckp: src/checkpoints/UNet.pth
 
   UNet++:
     in_channels: *in_channels
     num_classes: 13
-    ckp: ckp.pth
+    ckp: src/checkpoints/UNet++.pth
 
   ViTSegmenter:
     image_size: *im_size
@@ -26,19 +26,18 @@ MODEL:
     attention_dropout: 0.1
     fc_out_dropout: 0.1
     mlp_dropout: 0.1
-    ckp: ckp.pth
+    ckp: src/checkpoints/ViTSegmenter.pth
 
   ResViTSegmenter:
     image_size: *im_size
-    patch_size: 16
+    patch_size_list: [8, 16, 32, 64]
     in_channels: *in_channels
     num_classes: *out_channels
     embedding_dim: 768
-    num_layers: 6
-    num_blocks: 4
+    num_layers: 3
     num_heads: 12
     hidden_dim: 3072
     attention_dropout: 0.1
     fc_out_dropout: 0.1
     mlp_dropout: 0.1
-    ckp: ckp.pth
+    ckp: src/checkpoints/ResViTSegmenter.pth

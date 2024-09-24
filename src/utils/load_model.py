@@ -37,7 +37,7 @@ def load_model(model_type, config):
         parameters = config['MODEL']['ResViTSegmenter']
         model = ResViTSegmenter(
                     image_size = parameters['image_size'],
-                    patch_size = parameters['patch_size'],
+                    patch_size_list = parameters['patch_size_list'],
                     in_channels = parameters['in_channels'],
                     num_classes = parameters['num_classes'],
                     embedding_dim = parameters['embedding_dim'],
