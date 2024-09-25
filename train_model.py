@@ -12,7 +12,7 @@ from src.data import ImageSegmentationDataset
 from src.utils.early_stopping import EarlyStopping
 from src.utils.evaluate import evaluate_model
 from src.utils.loss import DiceLoss, FocalLoss
-from src.utils.load_model import load_model
+from src.models.load_model import load_model
 from src.utils.num_workers import find_num_workers
 from src.utils.one_epoch import train_one_epoch, val_one_epoch
 from src.utils.save_model import SaveModel
