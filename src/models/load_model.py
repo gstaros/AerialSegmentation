@@ -1,4 +1,5 @@
-from src.models import UNet, UNetPlusPlus, ViTSegmenter, ResViTSegmenter
+from .unet import UNet, UNetPlusPlus
+from .vit import ViTSegmenter, ResViTSegmenter
 
 def load_model(model_type, config):
 
